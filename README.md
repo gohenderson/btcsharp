@@ -31,7 +31,7 @@ This is **alpha-stage** software and **not safe for production use**.
 ## 🔧 Building
 
 ### Prerequisites
-- .NET 8 SDK
+- .NET 9 SDK
 - CMake ≥ 3.22
 - GCC/Clang (Linux/macOS) or MSVC (Windows)
 - Dependencies for Bitcoin Core (libevent, Boost, etc.) if building native stubs
@@ -40,14 +40,14 @@ This is **alpha-stage** software and **not safe for production use**.
 
 Clone the repository:
 ```bash
-git clone https://github.com/yourusername/btcsharp.git
+git clone https://github.com/gohenderson/btcsharp.git
 cd btcsharp
 ```
 
 Build the pruned native Core (used while porting):
 ```bash
-cmake -S . -B build -DENABLE_WALLET=OFF -DBUILD_GUI=OFF
-cmake --build build --target bitcoind bitcoin-cli -j4
+cmake -S . -B build
+cmake --build build --target bitcoind bitcoin-cli -j
 ```
 
 Build the managed components:
@@ -92,5 +92,5 @@ BTCSharp is licensed under the [MIT License](LICENSE), the same as Bitcoin Core.
 
 ---
 
-> **Note:** BTCSharp is a research and development project.  
-> It is *not* a drop-in replacement for production Bitcoin Core nodes yet.
+> **Note:** BTCSharp is a research and development project.
+> It is *not* a drop-in replacement for production Bitcoin Core nodes.
