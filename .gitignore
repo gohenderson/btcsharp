@@ -21,3 +21,5 @@ test/lint/test_runner/target/
 /guix-build-*
 
 /ci/scratch/
+
+.idea
