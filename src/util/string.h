@@ -100,30 +100,18 @@ void ReplaceAll(std::string& in_out, const std::string& search, const std::strin
  *
  * If sep does not occur in sp, a singleton with the entirety of sp is returned.
  *
- * @param[in] include_sep Whether to include the separator at the end of the left side of the splits.
- *
  * Note that this function does not care about braces, so splitting
  * "foo(bar(1),2),3) on ',' will return {"foo(bar(1)", "2)", "3)"}.
- *
- * If include_sep == true, splitting "foo(bar(1),2),3) on ','
- * will return:
- *  - foo(bar(1),
- *  - 2),
- *  - 3)
  */
-template <typename T = std::span<const char>>
-std::vector<T> Split(const std::span<const char>& sp, std::string_view separators, bool include_sep = false)
+template <typename T = Span<const char>>
+std::vector<T> Split(const Span<const char>& sp, std::string_view separators)
 {
     std::vector<T> ret;
     auto it = sp.begin();
     auto start = it;
     while (it != sp.end()) {
         if (separators.find(*it) != std::string::npos) {
-            if (include_sep) {
-                ret.emplace_back(start, it + 1);
-            } else {
-                ret.emplace_back(start, it);
-            }
+            ret.emplace_back(start, it);
             start = it + 1;
         }
         ++it;
@@ -139,10 +127,10 @@ std::vector<T> Split(const std::span<const char>& sp, std::string_view separator
  * Note that this function does not care about braces, so splitting
  * "foo(bar(1),2),3) on ',' will return {"foo(bar(1)", "2)", "3)"}.
  */
-template <typename T = std::span<const char>>
-std::vector<T> Split(const std::span<const char>& sp, char sep, bool include_sep = false)
+template <typename T = Span<const char>>
+std::vector<T> Split(const Span<const char>& sp, char sep)
 {
-    return Split<T>(sp, std::string_view{&sep, 1}, include_sep);
+    return Split<T>(sp, std::string_view{&sep, 1});
 }
 
 [[nodiscard]] inline std::vector<std::string> SplitString(std::string_view str, char sep)
@@ -180,7 +168,7 @@ std::vector<T> Split(const std::span<const char>& sp, char sep, bool include_sep
 
 [[nodiscard]] inline std::string_view RemovePrefixView(std::string_view str, std::string_view prefix)
 {
-    if (str.starts_with(prefix)) {
+    if (str.substr(0, prefix.size()) == prefix) {
         return str.substr(prefix.size());
     }
     return str;

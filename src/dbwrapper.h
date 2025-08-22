@@ -1,4 +1,4 @@
-// Copyright (c) 2012-present The Bitcoin Core developers
+// Copyright (c) 2012-2022 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -18,6 +18,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 static const size_t DBWRAPPER_PREALLOC_KEY_SIZE = 64;
 static const size_t DBWRAPPER_PREALLOC_VALUE_SIZE = 1024;
@@ -62,7 +63,8 @@ namespace dbwrapper_private {
  * Database obfuscation should be considered an implementation detail of the
  * specific database.
  */
-const Obfuscation& GetObfuscation(const CDBWrapper&);
+const std::vector<unsigned char>& GetObfuscateKey(const CDBWrapper &w);
+
 }; // namespace dbwrapper_private
 
 bool DestroyDB(const std::string& path_str);
@@ -81,8 +83,10 @@ private:
     DataStream ssKey{};
     DataStream ssValue{};
 
-    void WriteImpl(std::span<const std::byte> key, DataStream& ssValue);
-    void EraseImpl(std::span<const std::byte> key);
+    size_t size_estimate{0};
+
+    void WriteImpl(Span<const std::byte> key, DataStream& ssValue);
+    void EraseImpl(Span<const std::byte> key);
 
 public:
     /**
@@ -113,7 +117,7 @@ public:
         ssKey.clear();
     }
 
-    size_t ApproximateSize() const;
+    size_t SizeEstimate() const { return size_estimate; }
 };
 
 class CDBIterator
@@ -125,9 +129,9 @@ private:
     const CDBWrapper &parent;
     const std::unique_ptr<IteratorImpl> m_impl_iter;
 
-    void SeekImpl(std::span<const std::byte> key);
-    std::span<const std::byte> GetKeyImpl() const;
-    std::span<const std::byte> GetValueImpl() const;
+    void SeekImpl(Span<const std::byte> key);
+    Span<const std::byte> GetKeyImpl() const;
+    Span<const std::byte> GetValueImpl() const;
 
 public:
 
@@ -164,7 +168,7 @@ public:
     template<typename V> bool GetValue(V& value) {
         try {
             DataStream ssValue{GetValueImpl()};
-            dbwrapper_private::GetObfuscation(parent)(ssValue);
+            ssValue.Xor(dbwrapper_private::GetObfuscateKey(parent));
             ssValue >> value;
         } catch (const std::exception&) {
             return false;
@@ -177,7 +181,7 @@ struct LevelDBContext;
 
 class CDBWrapper
 {
-    friend const Obfuscation& dbwrapper_private::GetObfuscation(const CDBWrapper&);
+    friend const std::vector<unsigned char>& dbwrapper_private::GetObfuscateKey(const CDBWrapper &w);
 private:
     //! holds all leveldb-specific fields of this class
     std::unique_ptr<LevelDBContext> m_db_context;
@@ -185,11 +189,16 @@ private:
     //! the name of this database
     std::string m_name;
 
-    //! optional XOR-obfuscation of the database
-    Obfuscation m_obfuscation;
+    //! a key used for optional XOR-obfuscation of the database
+    std::vector<unsigned char> obfuscate_key;
 
-    //! obfuscation key storage key, null-prefixed to avoid collisions
-    inline static const std::string OBFUSCATION_KEY{"\000obfuscate_key", 14}; // explicit size to avoid truncation at leading \0
+    //! the key under which the obfuscation key is stored
+    static const std::string OBFUSCATE_KEY_KEY;
+
+    //! the length of the obfuscate key in number of bytes
+    static const unsigned int OBFUSCATE_KEY_NUM_BYTES;
+
+    std::vector<unsigned char> CreateObfuscateKey() const;
 
     //! path to filesystem storage
     const fs::path m_path;
@@ -197,9 +206,9 @@ private:
     //! whether or not the database resides in memory
     bool m_is_memory;
 
-    std::optional<std::string> ReadImpl(std::span<const std::byte> key) const;
-    bool ExistsImpl(std::span<const std::byte> key) const;
-    size_t EstimateSizeImpl(std::span<const std::byte> key1, std::span<const std::byte> key2) const;
+    std::optional<std::string> ReadImpl(Span<const std::byte> key) const;
+    bool ExistsImpl(Span<const std::byte> key) const;
+    size_t EstimateSizeImpl(Span<const std::byte> key1, Span<const std::byte> key2) const;
     auto& DBContext() const LIFETIMEBOUND { return *Assert(m_db_context); }
 
 public:
@@ -221,7 +230,7 @@ public:
         }
         try {
             DataStream ssValue{MakeByteSpan(*strValue)};
-            m_obfuscation(ssValue);
+            ssValue.Xor(obfuscate_key);
             ssValue >> value;
         } catch (const std::exception&) {
             return false;

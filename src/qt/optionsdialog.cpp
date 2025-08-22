@@ -164,7 +164,11 @@ OptionsDialog::OptionsDialog(QWidget* parent, bool enableWallet)
         {
             /** display language strings as "native language - native country/territory (locale name)", e.g. "Deutsch - Deutschland (de)" */
             ui->lang->addItem(locale.nativeLanguageName() + QString(" - ") +
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 2, 0))
                               locale.nativeTerritoryName() +
+#else
+                              locale.nativeCountryName() +
+#endif
                               QString(" (") + langStr + QString(")"), QVariant(langStr));
 
         }
@@ -482,7 +486,7 @@ QValidator::State ProxyAddressValidator::validate(QString &input, int &pos) cons
     if (!SplitHostPort(input.toStdString(), port, hostname) || port != 0) return QValidator::Invalid;
 
     CService serv(LookupNumeric(input.toStdString(), DEFAULT_GUI_PROXY_PORT));
-    Proxy addrProxy = Proxy(serv, /*tor_stream_isolation=*/true);
+    Proxy addrProxy = Proxy(serv, true);
     if (addrProxy.IsValid())
         return QValidator::Acceptable;
 

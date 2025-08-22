@@ -33,9 +33,11 @@ from test_framework.messages import (
     CTxInWitness,
     CTxOut,
     hash256,
+    ser_compact_size,
 )
 from test_framework.script import (
     CScript,
+    OP_1,
     OP_NOP,
     OP_RETURN,
     OP_TRUE,
@@ -43,7 +45,6 @@ from test_framework.script import (
     taproot_construct,
 )
 from test_framework.script_util import (
-    bulk_vout,
     key_to_p2pk_script,
     key_to_p2pkh_script,
     key_to_p2sh_p2wpkh_script,
@@ -120,9 +121,17 @@ class MiniWallet:
         """Pad a transaction with extra outputs until it reaches a target vsize.
         returns the tx
         """
-        tx.vout.append(CTxOut(nValue=0, scriptPubKey=CScript([OP_RETURN])))
-        bulk_vout(tx, target_vsize)
+        if target_vsize < tx.get_vsize():
+            raise RuntimeError(f"target_vsize {target_vsize} is less than transaction virtual size {tx.get_vsize()}")
 
+        tx.vout.append(CTxOut(nValue=0, scriptPubKey=CScript([OP_RETURN])))
+        # determine number of needed padding bytes
+        dummy_vbytes = target_vsize - tx.get_vsize()
+        # compensate for the increase of the compact-size encoded script length
+        # (note that the length encoding of the unpadded output script needs one byte)
+        dummy_vbytes -= len(ser_compact_size(dummy_vbytes)) - 1
+        tx.vout[-1].scriptPubKey = CScript([OP_RETURN] + [OP_1] * dummy_vbytes)
+        assert_equal(tx.get_vsize(), target_vsize)
 
     def get_balance(self):
         return sum(u['value'] for u in self._utxos)
@@ -278,7 +287,7 @@ class MiniWallet:
         return {
             "sent_vout": 1,
             "txid": txid,
-            "wtxid": tx.wtxid_hex,
+            "wtxid": tx.getwtxid(),
             "hex": tx.serialize().hex(),
             "tx": tx,
         }
@@ -331,7 +340,7 @@ class MiniWallet:
         if target_vsize:
             self._bulk_tx(tx, target_vsize)
 
-        txid = tx.txid_hex
+        txid = tx.rehash()
         return {
             "new_utxos": [self._create_utxo(
                 txid=txid,
@@ -343,7 +352,7 @@ class MiniWallet:
             ) for i in range(len(tx.vout))],
             "fee": fee,
             "txid": txid,
-            "wtxid": tx.wtxid_hex,
+            "wtxid": tx.getwtxid(),
             "hex": tx.serialize().hex(),
             "tx": tx,
         }

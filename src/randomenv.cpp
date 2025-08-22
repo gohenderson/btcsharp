@@ -38,18 +38,18 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 #endif
-#ifdef HAVE_IFADDRS
+#if HAVE_DECL_GETIFADDRS && HAVE_DECL_FREEIFADDRS
 #include <ifaddrs.h>
 #endif
 #ifdef HAVE_SYSCTL
 #include <sys/sysctl.h>
-#if __has_include(<vm/vm_param.h>)
+#ifdef HAVE_VM_VM_PARAM_H
 #include <vm/vm_param.h>
 #endif
-#if __has_include(<sys/resources.h>)
+#ifdef HAVE_SYS_RESOURCES_H
 #include <sys/resources.h>
 #endif
-#if __has_include(<sys/vmmeter.h>)
+#ifdef HAVE_SYS_VMMETER_H
 #include <sys/vmmeter.h>
 #endif
 #endif
@@ -70,10 +70,10 @@ namespace {
  */
 template<typename T>
 CSHA512& operator<<(CSHA512& hasher, const T& data) {
-    static_assert(!std::is_same_v<std::decay_t<T>, char*>, "Calling operator<<(CSHA512, char*) is probably not what you want");
-    static_assert(!std::is_same_v<std::decay_t<T>, unsigned char*>, "Calling operator<<(CSHA512, unsigned char*) is probably not what you want");
-    static_assert(!std::is_same_v<std::decay_t<T>, const char*>, "Calling operator<<(CSHA512, const char*) is probably not what you want");
-    static_assert(!std::is_same_v<std::decay_t<T>, const unsigned char*>, "Calling operator<<(CSHA512, const unsigned char*) is probably not what you want");
+    static_assert(!std::is_same<typename std::decay<T>::type, char*>::value, "Calling operator<<(CSHA512, char*) is probably not what you want");
+    static_assert(!std::is_same<typename std::decay<T>::type, unsigned char*>::value, "Calling operator<<(CSHA512, unsigned char*) is probably not what you want");
+    static_assert(!std::is_same<typename std::decay<T>::type, const char*>::value, "Calling operator<<(CSHA512, const char*) is probably not what you want");
+    static_assert(!std::is_same<typename std::decay<T>::type, const unsigned char*>::value, "Calling operator<<(CSHA512, const unsigned char*) is probably not what you want");
     hasher.Write((const unsigned char*)&data, sizeof(data));
     return hasher;
 }
@@ -330,7 +330,7 @@ void RandAddStaticEnv(CSHA512& hasher)
     }
 #endif
 
-#ifdef HAVE_IFADDRS
+#if HAVE_DECL_GETIFADDRS && HAVE_DECL_FREEIFADDRS
     // Network interfaces
     struct ifaddrs *ifad = nullptr;
     getifaddrs(&ifad);

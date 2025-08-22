@@ -15,7 +15,6 @@ from test_framework.util import (
     assert_equal,
     assert_greater_than,
     assert_raises_rpc_error,
-    assert_not_equal,
 )
 from test_framework.wallet import (
     MiniWallet,
@@ -38,13 +37,13 @@ class EphemeralDustTest(BitcoinTestFramework):
         # Take value from first output
         result["tx"].vout[0].nValue -= output_value
         result["new_utxos"][0]["value"] = Decimal(result["tx"].vout[0].nValue) / COIN
-        new_txid = result["tx"].txid_hex
+        new_txid = result["tx"].rehash()
         result["txid"]  = new_txid
-        result["wtxid"] = result["tx"].wtxid_hex
+        result["wtxid"] = result["tx"].getwtxid()
         result["hex"] = result["tx"].serialize().hex()
         for new_utxo in result["new_utxos"]:
             new_utxo["txid"] = new_txid
-            new_utxo["wtxid"] = result["tx"].wtxid_hex
+            new_utxo["wtxid"] = result["tx"].getwtxid()
 
         result["new_utxos"].append({"txid": new_txid, "vout": len(result["tx"].vout) - 1, "value": Decimal(output_value) / COIN, "height": 0, "coinbase": False, "confirmations": 0})
 
@@ -216,7 +215,7 @@ class EphemeralDustTest(BitcoinTestFramework):
 
         res = self.nodes[0].submitpackage([dusty_tx["hex"], sweep_tx["hex"]])
         assert_equal(res["package_msg"], "transaction failed")
-        assert_equal(res["tx-results"][dusty_tx["wtxid"]]["error"], "min relay fee not met, 0 < 15")
+        assert_equal(res["tx-results"][dusty_tx["wtxid"]]["error"], "min relay fee not met, 0 < 147")
 
         assert_equal(self.nodes[0].getrawmempool(), [])
 
@@ -240,7 +239,7 @@ class EphemeralDustTest(BitcoinTestFramework):
 
         # Spend works with dust spent
         sweep_tx_2 = self.wallet.create_self_transfer_multi(fee_per_output=2000, utxos_to_spend=dusty_tx["new_utxos"], version=3)
-        assert_not_equal(sweep_tx["hex"], sweep_tx_2["hex"])
+        assert sweep_tx["hex"] != sweep_tx_2["hex"]
         res = self.nodes[0].submitpackage([dusty_tx["hex"], sweep_tx_2["hex"]])
         assert_equal(res["package_msg"], "success")
 

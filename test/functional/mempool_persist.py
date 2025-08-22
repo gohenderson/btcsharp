@@ -50,16 +50,19 @@ from test_framework.wallet import MiniWallet, COIN
 
 
 class MempoolPersistTest(BitcoinTestFramework):
+    def add_options(self, parser):
+        self.add_wallet_options(parser, legacy=False)
+
     def set_test_params(self):
         self.num_nodes = 3
         self.extra_args = [[], ["-persistmempool=0"], []]
-        self.uses_wallet = None
 
     def run_test(self):
         self.mini_wallet = MiniWallet(self.nodes[2])
-        if self.is_wallet_compiled():
+        if self.is_sqlite_compiled():
             self.nodes[2].createwallet(
                 wallet_name="watch",
+                descriptors=True,
                 disable_private_keys=True,
                 load_on_startup=False,
             )
@@ -70,7 +73,7 @@ class MempoolPersistTest(BitcoinTestFramework):
         tx_creation_time_lower = int(time.time())
         for _ in range(5):
             last_txid = self.mini_wallet.send_self_transfer(from_node=self.nodes[2])["txid"]
-        if self.is_wallet_compiled():
+        if self.is_sqlite_compiled():
             self.nodes[2].syncwithvalidationinterfacequeue()  # Flush mempool to wallet
             node2_balance = wallet_watch.getbalance()
         self.sync_all()
@@ -134,7 +137,7 @@ class MempoolPersistTest(BitcoinTestFramework):
         assert_equal(entry_prioritised_before_restart['fees']['base'] + Decimal('0.00009999'), entry_prioritised_before_restart['fees']['modified'])
 
         # Verify accounting of mempool transactions after restart is correct
-        if self.is_wallet_compiled():
+        if self.is_sqlite_compiled():
             self.nodes[2].loadwallet("watch")
             wallet_watch = self.nodes[2].get_wallet_rpc("watch")
             self.nodes[2].syncwithvalidationinterfacequeue()  # Flush mempool to wallet

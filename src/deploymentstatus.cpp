@@ -24,7 +24,7 @@ static_assert(!ValidDeployment(static_cast<Consensus::BuriedDeployment>(Consensu
 template<typename T, T x>
 static constexpr bool is_minimum()
 {
-    using U = std::underlying_type_t<T>;
+    using U = typename std::underlying_type<T>::type;
     return x == std::numeric_limits<U>::min();
 }
 

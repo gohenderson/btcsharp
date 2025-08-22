@@ -25,9 +25,6 @@ using common::AmountErrMsg;
 using kernel::MemPoolLimits;
 using kernel::MemPoolOptions;
 
-//! Maximum mempool size on 32-bit systems.
-static constexpr int MAX_32BIT_MEMPOOL_MB{500};
-
 namespace {
 void ApplyArgsManOptions(const ArgsManager& argsman, MemPoolLimits& mempool_limits)
 {
@@ -45,47 +42,40 @@ util::Result<void> ApplyArgsManOptions(const ArgsManager& argsman, const CChainP
 {
     mempool_opts.check_ratio = argsman.GetIntArg("-checkmempool", mempool_opts.check_ratio);
 
-    if (auto mb = argsman.GetIntArg("-maxmempool")) {
-        constexpr bool is_32bit{sizeof(void*) == 4};
-        if (is_32bit && *mb > MAX_32BIT_MEMPOOL_MB) {
-            return util::Error{Untranslated(strprintf("-maxmempool is set to %i but can't be over %i MB on 32-bit systems", *mb, MAX_32BIT_MEMPOOL_MB))};
-        }
-        mempool_opts.max_size_bytes = *mb * 1'000'000;
-    }
+    if (auto mb = argsman.GetIntArg("-maxmempool")) mempool_opts.max_size_bytes = *mb * 1'000'000;
 
     if (auto hours = argsman.GetIntArg("-mempoolexpiry")) mempool_opts.expiry = std::chrono::hours{*hours};
 
     // incremental relay fee sets the minimum feerate increase necessary for replacement in the mempool
     // and the amount the mempool min fee increases above the feerate of txs evicted due to mempool limiting.
-    if (const auto arg{argsman.GetArg("-incrementalrelayfee")}) {
-        if (std::optional<CAmount> inc_relay_fee = ParseMoney(*arg)) {
+    if (argsman.IsArgSet("-incrementalrelayfee")) {
+        if (std::optional<CAmount> inc_relay_fee = ParseMoney(argsman.GetArg("-incrementalrelayfee", ""))) {
             mempool_opts.incremental_relay_feerate = CFeeRate{inc_relay_fee.value()};
         } else {
-            return util::Error{AmountErrMsg("incrementalrelayfee", *arg)};
+            return util::Error{AmountErrMsg("incrementalrelayfee", argsman.GetArg("-incrementalrelayfee", ""))};
         }
     }
 
-    static_assert(DEFAULT_MIN_RELAY_TX_FEE == DEFAULT_INCREMENTAL_RELAY_FEE);
-    if (const auto arg{argsman.GetArg("-minrelaytxfee")}) {
-        if (std::optional<CAmount> min_relay_feerate = ParseMoney(*arg)) {
+    if (argsman.IsArgSet("-minrelaytxfee")) {
+        if (std::optional<CAmount> min_relay_feerate = ParseMoney(argsman.GetArg("-minrelaytxfee", ""))) {
             // High fee check is done afterward in CWallet::Create()
             mempool_opts.min_relay_feerate = CFeeRate{min_relay_feerate.value()};
         } else {
-            return util::Error{AmountErrMsg("minrelaytxfee", *arg)};
+            return util::Error{AmountErrMsg("minrelaytxfee", argsman.GetArg("-minrelaytxfee", ""))};
         }
     } else if (mempool_opts.incremental_relay_feerate > mempool_opts.min_relay_feerate) {
         // Allow only setting incremental fee to control both
         mempool_opts.min_relay_feerate = mempool_opts.incremental_relay_feerate;
-        LogInfo("Increasing minrelaytxfee to %s to match incrementalrelayfee", mempool_opts.min_relay_feerate.ToString());
+        LogPrintf("Increasing minrelaytxfee to %s to match incrementalrelayfee\n", mempool_opts.min_relay_feerate.ToString());
     }
 
     // Feerate used to define dust.  Shouldn't be changed lightly as old
     // implementations may inadvertently create non-standard transactions
-    if (const auto arg{argsman.GetArg("-dustrelayfee")}) {
-        if (std::optional<CAmount> parsed = ParseMoney(*arg)) {
+    if (argsman.IsArgSet("-dustrelayfee")) {
+        if (std::optional<CAmount> parsed = ParseMoney(argsman.GetArg("-dustrelayfee", ""))) {
             mempool_opts.dust_relay_feerate = CFeeRate{parsed.value()};
         } else {
-            return util::Error{AmountErrMsg("dustrelayfee", *arg)};
+            return util::Error{AmountErrMsg("dustrelayfee", argsman.GetArg("-dustrelayfee", ""))};
         }
     }
 

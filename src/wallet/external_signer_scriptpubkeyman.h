@@ -8,7 +8,6 @@
 #include <wallet/scriptpubkeyman.h>
 
 #include <memory>
-#include <util/result.h>
 
 struct bilingual_str;
 
@@ -28,7 +27,7 @@ class ExternalSignerScriptPubKeyMan : public DescriptorScriptPubKeyMan
   */
   bool SetupDescriptor(WalletBatch& batch, std::unique_ptr<Descriptor>desc);
 
-  static util::Result<ExternalSigner> GetExternalSigner();
+  static ExternalSigner GetExternalSigner();
 
   /**
   * Display address on the device and verify that the returned value matches.
@@ -36,7 +35,7 @@ class ExternalSignerScriptPubKeyMan : public DescriptorScriptPubKeyMan
   */
  util::Result<void> DisplayAddress(const CTxDestination& dest, const ExternalSigner& signer) const;
 
-  std::optional<common::PSBTError> FillPSBT(PartiallySignedTransaction& psbt, const PrecomputedTransactionData& txdata, std::optional<int> sighash_type = std::nullopt, bool sign = true, bool bip32derivs = false, int* n_signed = nullptr, bool finalize = true) const override;
+  std::optional<common::PSBTError> FillPSBT(PartiallySignedTransaction& psbt, const PrecomputedTransactionData& txdata, int sighash_type = 1 /* SIGHASH_ALL */, bool sign = true, bool bip32derivs = false, int* n_signed = nullptr, bool finalize = true) const override;
 };
 } // namespace wallet
 #endif // BITCOIN_WALLET_EXTERNAL_SIGNER_SCRIPTPUBKEYMAN_H

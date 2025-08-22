@@ -6,11 +6,11 @@
 
 export LC_ALL=C.UTF-8
 
-set -o errexit -o pipefail -o xtrace
+set -ex
 
-CFG_DONE="${BASE_ROOT_DIR}/ci.base-install-done"  # Use a global setting to remember whether this script ran to avoid running it twice
+CFG_DONE="ci.base-install-done"  # Use a global git setting to remember whether this script ran to avoid running it twice
 
-if [ "$( cat "${CFG_DONE}" || true )" == "done" ]; then
+if [ "$(git config --global ${CFG_DONE})" == "true" ]; then
   echo "Skip base install"
   exit 0
 fi
@@ -34,8 +34,7 @@ fi
 
 if [[ $CI_IMAGE_NAME_TAG == *centos* ]]; then
   bash -c "dnf -y install epel-release"
-  # The ninja-build package is available in the CRB repository.
-  bash -c "dnf -y --allowerasing --enablerepo crb install $CI_BASE_PACKAGES $PACKAGES"
+  bash -c "dnf -y --allowerasing install $CI_BASE_PACKAGES $PACKAGES"
 elif [ "$CI_OS_NAME" != "macos" ]; then
   if [[ -n "${APPEND_APT_SOURCES_LIST}" ]]; then
     echo "${APPEND_APT_SOURCES_LIST}" >> /etc/apt/sources.list
@@ -44,42 +43,32 @@ elif [ "$CI_OS_NAME" != "macos" ]; then
   ${CI_RETRY_EXE} bash -c "apt-get install --no-install-recommends --no-upgrade -y $PACKAGES $CI_BASE_PACKAGES"
 fi
 
-if [ -n "${APT_LLVM_V}" ]; then
-  update-alternatives --install /usr/bin/clang++ clang++ "/usr/bin/clang++-${APT_LLVM_V}" 100
-  update-alternatives --install /usr/bin/clang clang "/usr/bin/clang-${APT_LLVM_V}" 100
-  update-alternatives --install /usr/bin/llvm-symbolizer llvm-symbolizer "/usr/bin/llvm-symbolizer-${APT_LLVM_V}" 100
-fi
-
 if [ -n "$PIP_PACKAGES" ]; then
   # shellcheck disable=SC2086
   ${CI_RETRY_EXE} pip3 install --user $PIP_PACKAGES
 fi
 
-if [[ -n "${USE_INSTRUMENTED_LIBCPP}" ]]; then
-  if [ -n "${APT_LLVM_V}" ]; then
-    ${CI_RETRY_EXE} git clone --depth=1 https://github.com/llvm/llvm-project -b "llvmorg-$( clang --version | sed --silent 's@.*clang version \([0-9.]*\).*@\1@p' )" /llvm-project
-  else
-    ${CI_RETRY_EXE} git clone --depth=1 https://github.com/llvm/llvm-project -b "llvmorg-20.1.8" /llvm-project
+if [[ ${USE_MEMORY_SANITIZER} == "true" ]]; then
+  ${CI_RETRY_EXE} git clone --depth=1 https://github.com/llvm/llvm-project -b "llvmorg-20.1.0" /msan/llvm-project
 
-    cmake -G Ninja -B /clang_build/ \
-      -DLLVM_ENABLE_PROJECTS="clang" \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DLLVM_TARGETS_TO_BUILD=Native \
-      -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind" \
-      -S /llvm-project/llvm
+  cmake -G Ninja -B /msan/clang_build/ \
+    -DLLVM_ENABLE_PROJECTS="clang" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DLLVM_TARGETS_TO_BUILD=Native \
+    -DLLVM_ENABLE_RUNTIMES="compiler-rt;libcxx;libcxxabi;libunwind" \
+    -S /msan/llvm-project/llvm
 
-    ninja -C /clang_build/ "$MAKEJOBS"
-    ninja -C /clang_build/ install-runtimes
+  ninja -C /msan/clang_build/ "$MAKEJOBS"
+  ninja -C /msan/clang_build/ install-runtimes
 
-    update-alternatives --install /usr/bin/clang++ clang++ /clang_build/bin/clang++ 100
-    update-alternatives --install /usr/bin/clang clang /clang_build/bin/clang 100
-    update-alternatives --install /usr/bin/llvm-symbolizer llvm-symbolizer /clang_build/bin/llvm-symbolizer 100
-  fi
+  update-alternatives --install /usr/bin/clang++ clang++ /msan/clang_build/bin/clang++ 100
+  update-alternatives --install /usr/bin/clang clang /msan/clang_build/bin/clang 100
+  update-alternatives --install /usr/bin/llvm-symbolizer llvm-symbolizer /msan/clang_build/bin/llvm-symbolizer 100
 
-  cmake -G Ninja -B /cxx_build/ \
+  cmake -G Ninja -B /msan/cxx_build/ \
     -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DLLVM_USE_SANITIZER="${USE_INSTRUMENTED_LIBCPP}" \
+    -DLLVM_USE_SANITIZER=MemoryWithOrigins \
     -DCMAKE_C_COMPILER=clang \
     -DCMAKE_CXX_COMPILER=clang++ \
     -DLLVM_TARGETS_TO_BUILD=Native \
@@ -87,13 +76,13 @@ if [[ -n "${USE_INSTRUMENTED_LIBCPP}" ]]; then
     -DLIBCXXABI_USE_LLVM_UNWINDER=OFF \
     -DLIBCXX_ABI_DEFINES="_LIBCPP_ABI_BOUNDED_ITERATORS;_LIBCPP_ABI_BOUNDED_ITERATORS_IN_STD_ARRAY;_LIBCPP_ABI_BOUNDED_ITERATORS_IN_STRING;_LIBCPP_ABI_BOUNDED_ITERATORS_IN_VECTOR;_LIBCPP_ABI_BOUNDED_UNIQUE_PTR" \
     -DLIBCXX_HARDENING_MODE=debug \
-    -S /llvm-project/runtimes
+    -S /msan/llvm-project/runtimes
 
-  ninja -C /cxx_build/ "$MAKEJOBS"
+  ninja -C /msan/cxx_build/ "$MAKEJOBS"
 
   # Clear no longer needed source folder
-  du -sh /llvm-project
-  rm -rf /llvm-project
+  du -sh /msan/llvm-project
+  rm -rf /msan/llvm-project
 fi
 
 if [[ "${RUN_TIDY}" == "true" ]]; then
@@ -115,4 +104,4 @@ if [ -n "$XCODE_VERSION" ] && [ ! -d "${DEPENDS_DIR}/SDKs/${OSX_SDK_BASENAME}" ]
   tar -C "${DEPENDS_DIR}/SDKs" -xf "$OSX_SDK_PATH"
 fi
 
-echo -n "done" > "${CFG_DONE}"
+git config --global ${CFG_DONE} "true"

@@ -6,19 +6,17 @@
              (gnu packages commencement)
              (gnu packages compression)
              (gnu packages cross-base)
+             (gnu packages file)
              (gnu packages gawk)
              (gnu packages gcc)
              ((gnu packages installers) #:select (nsis-x86_64))
              ((gnu packages linux) #:select (linux-libre-headers-6.1))
              (gnu packages llvm)
              (gnu packages mingw)
-             (gnu packages ninja)
              (gnu packages pkg-config)
              ((gnu packages python) #:select (python-minimal))
-             ((gnu packages python-build) #:select (python-poetry-core))
+             ((gnu packages python-build) #:select (python-tomli python-poetry-core))
              ((gnu packages python-crypto) #:select (python-asn1crypto))
-             ((gnu packages python-science) #:select (python-scikit-build-core))
-             ((gnu packages python-xyz) #:select (python-pydantic-2 python-pydantic-core))
              ((gnu packages tls) #:select (openssl))
              ((gnu packages version-control) #:select (git-minimal))
              (guix build-system cmake)
@@ -160,35 +158,37 @@ chain for " target " development."))
 (define-public python-lief
   (package
     (name "python-lief")
-    (version "0.16.6")
+    (version "0.13.2")
     (source (origin
               (method git-fetch)
               (uri (git-reference
                     (url "https://github.com/lief-project/LIEF")
                     (commit version)))
               (file-name (git-file-name name version))
+              (modules '((guix build utils)))
+              (snippet
+               '(begin
+                  ;; Configure build for Python bindings.
+                  (substitute* "api/python/config-default.toml"
+                    (("(ninja         = )true" all m)
+                     (string-append m "false"))
+                    (("(parallel-jobs = )0" all m)
+                     (string-append m (number->string (parallel-job-count)))))))
               (sha256
                (base32
-                "1pq9nagrnkl1x943bqnpiyxmkd9vk99znfxiwqp6vf012b50bz2a"))
-              (patches (search-our-patches "lief-scikit-0-9.patch"))))
-    (build-system pyproject-build-system)
-    (native-inputs (list cmake-minimal
-                         ninja
-                         python-scikit-build-core
-                         python-pydantic-core
-                         python-pydantic-2))
+                "0y48x358ppig5xp97ahcphfipx7cg9chldj2q5zrmn610fmi4zll"))))
+    (build-system python-build-system)
+    (native-inputs (list cmake-minimal python-tomli))
     (arguments
      (list
       #:tests? #f                  ;needs network
       #:phases #~(modify-phases %standard-phases
-                   (add-before 'build 'set-pythonpath
+                   (add-before 'build 'change-directory
                      (lambda _
-                       (setenv "PYTHONPATH"
-                         (string-append (string-append (getcwd) "/api/python/backend")
-                                      ":" (or (getenv "PYTHONPATH") "")))))
-                  (add-after 'set-pythonpath 'change-directory
+                       (chdir "api/python")))
+                   (replace 'build
                      (lambda _
-                       (chdir "api/python"))))))
+                       (invoke "python" "setup.py" "build"))))))
     (home-page "https://github.com/lief-project/LIEF")
     (synopsis "Library to instrument executable formats")
     (description
@@ -530,6 +530,7 @@ inspecting signatures in Mach-O binaries.")
         which
         coreutils-minimal
         ;; File(system) inspection
+        file
         grep
         diffutils
         findutils
@@ -546,7 +547,6 @@ inspecting signatures in Mach-O binaries.")
         gcc-toolchain-13
         cmake-minimal
         gnu-make
-        ninja
         ;; Scripting
         python-minimal ;; (3.10)
         ;; Git

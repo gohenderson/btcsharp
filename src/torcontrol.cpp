@@ -26,7 +26,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cstdint>
 #include <cstdlib>
 #include <deque>
 #include <functional>
@@ -53,9 +52,6 @@ const std::string DEFAULT_TOR_CONTROL = "127.0.0.1:" + ToString(DEFAULT_TOR_CONT
 static const int TOR_COOKIE_SIZE = 32;
 /** Size of client/server nonce for SAFECOOKIE */
 static const int TOR_NONCE_SIZE = 32;
-/** Tor control reply code. Ref: https://spec.torproject.org/control-spec/replies.html */
-static const int TOR_REPLY_OK = 250;
-static const int TOR_REPLY_UNRECOGNIZED = 510;
 /** For computing serverHash in SAFECOOKIE */
 static const std::string TOR_SAFE_SERVERKEY = "Tor safe cookie authentication server-to-controller hash";
 /** For computing clientHash in SAFECOOKIE */
@@ -64,13 +60,12 @@ static const std::string TOR_SAFE_CLIENTKEY = "Tor safe cookie authentication co
 static const float RECONNECT_TIMEOUT_START = 1.0;
 /** Exponential backoff configuration - growth factor */
 static const float RECONNECT_TIMEOUT_EXP = 1.5;
-/** Maximum reconnect timeout in seconds to prevent excessive delays */
-static const float RECONNECT_TIMEOUT_MAX = 600.0;
 /** Maximum length for lines received on TorControlConnection.
  * tor-control-spec.txt mentions that there is explicitly no limit defined to line length,
  * this is belt-and-suspenders sanity limit to prevent memory exhaustion.
  */
 static const int MAX_LINE_LENGTH = 100000;
+static const uint16_t DEFAULT_TOR_SOCKS_PORT = 9050;
 
 /****** Low-level TorControlConnection ********/
 
@@ -359,7 +354,7 @@ void TorController::get_socks_cb(TorControlConnection& _conn, const TorControlRe
 {
     // NOTE: We can only get here if -onion is unset
     std::string socks_location;
-    if (reply.code == TOR_REPLY_OK) {
+    if (reply.code == 250) {
         for (const auto& line : reply.lines) {
             if (line.starts_with("net/listeners/socks=")) {
                 const std::string port_list_str = line.substr(20);
@@ -384,7 +379,7 @@ void TorController::get_socks_cb(TorControlConnection& _conn, const TorControlRe
         } else {
             LogPrintf("tor: Get SOCKS port command returned nothing\n");
         }
-    } else if (reply.code == TOR_REPLY_UNRECOGNIZED) {
+    } else if (reply.code == 510) {  // 510 Unrecognized command
         LogPrintf("tor: Get SOCKS port command failed with unrecognized command (You probably should upgrade Tor)\n");
     } else {
         LogPrintf("tor: Get SOCKS port command failed; error code %d\n", reply.code);
@@ -402,11 +397,7 @@ void TorController::get_socks_cb(TorControlConnection& _conn, const TorControlRe
 
     Assume(resolved.IsValid());
     LogDebug(BCLog::TOR, "Configuring onion proxy for %s\n", resolved.ToStringAddrPort());
-
-    // Add Tor as proxy for .onion addresses.
-    // Enable stream isolation to prevent connection correlation and enhance privacy, by forcing a different Tor circuit for every connection.
-    // For this to work, the IsolateSOCKSAuth flag must be enabled on SOCKSPort (which is the default, see the IsolateSOCKSAuth section of Tor's manual page).
-    Proxy addrOnion = Proxy(resolved, /*tor_stream_isolation=*/ true);
+    Proxy addrOnion = Proxy(resolved, true);
     SetProxy(NET_ONION, addrOnion);
 
     const auto onlynets = gArgs.GetArgs("-onlynet");
@@ -428,7 +419,7 @@ void TorController::get_socks_cb(TorControlConnection& _conn, const TorControlRe
 
 void TorController::add_onion_cb(TorControlConnection& _conn, const TorControlReply& reply)
 {
-    if (reply.code == TOR_REPLY_OK) {
+    if (reply.code == 250) {
         LogDebug(BCLog::TOR, "ADD_ONION successful\n");
         for (const std::string &s : reply.lines) {
             std::map<std::string,std::string> m = ParseTorReplyMapping(s);
@@ -454,7 +445,7 @@ void TorController::add_onion_cb(TorControlConnection& _conn, const TorControlRe
         }
         AddLocal(service, LOCAL_MANUAL);
         // ... onion requested - keep connection open
-    } else if (reply.code == TOR_REPLY_UNRECOGNIZED) {
+    } else if (reply.code == 510) { // 510 Unrecognized command
         LogPrintf("tor: Add onion failed with unrecognized command (You probably need to upgrade Tor)\n");
     } else {
         LogPrintf("tor: Add onion failed; error code %d\n", reply.code);
@@ -463,7 +454,7 @@ void TorController::add_onion_cb(TorControlConnection& _conn, const TorControlRe
 
 void TorController::auth_cb(TorControlConnection& _conn, const TorControlReply& reply)
 {
-    if (reply.code == TOR_REPLY_OK) {
+    if (reply.code == 250) {
         LogDebug(BCLog::TOR, "Authentication successful\n");
 
         // Now that we know Tor is running setup the proxy for onion addresses
@@ -514,7 +505,7 @@ static std::vector<uint8_t> ComputeResponse(const std::string &key, const std::v
 
 void TorController::authchallenge_cb(TorControlConnection& _conn, const TorControlReply& reply)
 {
-    if (reply.code == TOR_REPLY_OK) {
+    if (reply.code == 250) {
         LogDebug(BCLog::TOR, "SAFECOOKIE authentication challenge successful\n");
         std::pair<std::string,std::string> l = SplitTorReplyLine(reply.lines[0]);
         if (l.first == "AUTHCHALLENGE") {
@@ -549,7 +540,7 @@ void TorController::authchallenge_cb(TorControlConnection& _conn, const TorContr
 
 void TorController::protocolinfo_cb(TorControlConnection& _conn, const TorControlReply& reply)
 {
-    if (reply.code == TOR_REPLY_OK) {
+    if (reply.code == 250) {
         std::set<std::string> methods;
         std::string cookiefile;
         /*
@@ -640,15 +631,13 @@ void TorController::disconnected_cb(TorControlConnection& _conn)
     if (!reconnect)
         return;
 
-    LogDebug(BCLog::TOR, "Not connected to Tor control port %s, retrying in %.2f s\n",
-             m_tor_control_center, reconnect_timeout);
+    LogDebug(BCLog::TOR, "Not connected to Tor control port %s, trying to reconnect\n", m_tor_control_center);
 
-    // Single-shot timer for reconnect. Use exponential backoff with a maximum.
+    // Single-shot timer for reconnect. Use exponential backoff.
     struct timeval time = MillisToTimeval(int64_t(reconnect_timeout * 1000.0));
     if (reconnect_ev)
         event_add(reconnect_ev, &time);
-
-    reconnect_timeout = std::min(reconnect_timeout * RECONNECT_TIMEOUT_EXP, RECONNECT_TIMEOUT_MAX);
+    reconnect_timeout *= RECONNECT_TIMEOUT_EXP;
 }
 
 void TorController::Reconnect()
