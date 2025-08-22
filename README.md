@@ -46,8 +46,9 @@ cd btcsharp
 
 Build the pruned native Core (used while porting):
 ```bash
+rm -rf build
 cmake -S . -B build
-cmake --build build --target bitcoind bitcoin-cli -j
+cmake --build build --target bitcoind bitcoin-cli -j2
 ```
 
 Build the managed components:
