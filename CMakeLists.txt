@@ -553,6 +553,33 @@ endif()
 add_subdirectory(test)
 
 add_subdirectory(src)
+add_custom_target(dev_all ALL
+  DEPENDS
+  crc32c
+  leveldb
+  minisketch
+  bitcoin-cli
+  bitcoin-tx
+  bitcoin-util
+  bitcoin_cli
+  bitcoin_clientversion
+  bitcoin_common
+  bitcoin_consensus
+  bitcoin_node
+  bitcoind
+  generate_build_info
+  bitcoin_crypto
+  exhaustive_tests
+  noverify_tests
+  secp256k1
+  secp256k1_precomputed
+  tests
+  test_util
+  object
+  unitester
+  univalue
+  bitcoin_util
+)
 
 include(cmake/tests.cmake)
 
