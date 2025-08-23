@@ -574,7 +574,6 @@ add_custom_target(dev_all ALL
   secp256k1
   secp256k1_precomputed
   tests
-  test_util
   object
   unitester
   univalue
