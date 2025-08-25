@@ -637,15 +637,64 @@ endif()
 include(WarnAboutGlobalProperties)
 
 # top-level CMakeLists.txt
-add_library(btcsharp_log_bridge
-        src/btcsharp_log_bridge.cpp
-        src/your_hostfxr_bootstrap.cpp
-)
+add_library(btcsharp_log_bridge STATIC src/btcsharp_log_bridge.cpp)
 target_include_directories(btcsharp_log_bridge PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
 target_link_libraries(bitcoind btcsharp_log_bridge)
+target_link_libraries(bitcoin-cli btcsharp_log_bridge)
+target_link_libraries(bitcoin-tx btcsharp_log_bridge)
+target_link_libraries(test_bitcoin btcsharp_log_bridge)
 # optional:
 # target_link_libraries(bitcoin-cli PRIVATE btcsharp_log_bridge)
 
 # keep artifacts in ./build (you already set this up)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
+
+# --- Discover DOTNET_ROOT (same pattern as hostclr-hello) ---
+set(DOTNET_ROOT $ENV{DOTNET_ROOT})
+if(NOT DOTNET_ROOT)
+  set(DOTNET_ROOT "/usr/share/dotnet")
+endif()
+
+file(GLOB HOST_PACK_DIRS "${DOTNET_ROOT}/packs/Microsoft.NETCore.App.Host.linux-x64/*")
+if(HOST_PACK_DIRS)
+  list(SORT HOST_PACK_DIRS)
+  list(REVERSE HOST_PACK_DIRS)
+  list(GET HOST_PACK_DIRS 0 HOST_PACK_DIR)
+else()
+  message(FATAL_ERROR "Could not find Microsoft.NETCore.App.Host.linux-x64 under ${DOTNET_ROOT}/packs")
+endif()
+
+set(DEFAULT_NETHOST_NATIVE_DIR "${HOST_PACK_DIR}/runtimes/linux-x64/native")
+
+set(NETHOST_INCLUDE_DIR "${DEFAULT_NETHOST_NATIVE_DIR}" CACHE PATH "Dir containing nethost.h")
+set(NETHOST_LIB "" CACHE FILEPATH "Path to libnethost.so or .a")
+
+if(NOT EXISTS "${NETHOST_INCLUDE_DIR}/nethost.h")
+  message(FATAL_ERROR "nethost.h not found in ${NETHOST_INCLUDE_DIR}")
+endif()
+
+if(NOT NETHOST_LIB)
+  if(EXISTS "${DEFAULT_NETHOST_NATIVE_DIR}/libnethost.a")
+    set(NETHOST_LIB "${DEFAULT_NETHOST_NATIVE_DIR}/libnethost.a")
+  elseif(EXISTS "${DEFAULT_NETHOST_NATIVE_DIR}/libnethost.so")
+    set(NETHOST_LIB "${DEFAULT_NETHOST_NATIVE_DIR}/libnethost.so")
+  else()
+    message(FATAL_ERROR "libnethost not found under ${DEFAULT_NETHOST_NATIVE_DIR}. Set -DNETHOST_LIB=...")
+  endif()
+endif()
+
+message(STATUS "Using nethost include: ${NETHOST_INCLUDE_DIR}")
+message(STATUS "Using nethost lib:     ${NETHOST_LIB}")
+
+# --- The reusable bridge (STATIC lib) ---
+add_library(hostfxr_bridge STATIC
+        src/hostfxr_bridge.cpp
+)
+target_include_directories(hostfxr_bridge PRIVATE
+        ${NETHOST_INCLUDE_DIR}
+)
+# Linux: link dl + nethost. Keep signature STYLE consistent per target when linking!
+target_link_libraries(hostfxr_bridge ${NETHOST_LIB} dl)
+
+target_link_libraries(btcsharp_log_bridge hostfxr_bridge)

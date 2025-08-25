@@ -21,13 +21,14 @@ internal static class NativeLogBridge
         {
             foreach (var (lvl, msg) in _q.GetConsumingEnumerable())
             {
-                // TODO: route to your preferred logger. For now, Console.* is fine.
-                switch (lvl)
-                {
-                    case LogLevel.Error: Console.Error.WriteLine(msg); break;
-                    case LogLevel.Warn:  Console.Error.WriteLine(msg); break;
-                    default:             Console.Out.WriteLine(msg);   break;
-                }
+                Console.Out.WriteLine($"[BtcSharp] {msg}");
+//                 // TODO: route to your preferred logger. For now, Console.* is fine.
+//                 switch (lvl)
+//                 {
+//                     case LogLevel.Error: Console.Error.WriteLine(msg); break;
+//                     case LogLevel.Warn:  Console.Error.WriteLine(msg); break;
+//                     default:             Console.Out.WriteLine(msg);   break;
+//                 }
             }
         });
         t.IsBackground = true;

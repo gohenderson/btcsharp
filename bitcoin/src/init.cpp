@@ -109,6 +109,7 @@
 #include <sys/stat.h>
 #endif
 
+#include <btcsharp_log_bridge.h>
 #include <boost/signals2/signal.hpp>
 
 #ifdef ENABLE_ZMQ

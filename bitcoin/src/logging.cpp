@@ -393,7 +393,7 @@ void BCLog::Logger::LogPrintStr(std::string_view str, std::string_view logging_f
 
 void BCLog::Logger::LogPrintStr_(std::string_view str, std::string_view logging_function, std::string_view source_file, int source_line, BCLog::LogFlags category, BCLog::Level level)
 {
-    btcsharp_log(btcsharp_log_level::INFO, str.data(), str.size());
+    btcsharp_log(INFO, str.data(), str.size());
 
     std::string str_prefixed = LogEscapeMessage(str);
 

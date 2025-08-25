@@ -29,7 +29,9 @@
 #include <util/translation.h>
 
 #include <any>
+#include <btcsharp_log_bridge.h>
 #include <functional>
+#include <hostfxr_bridge.h>
 #include <optional>
 
 using node::NodeContext;
@@ -179,6 +181,8 @@ static bool AppInit(NodeContext& node)
         args.SoftSetBoolArg("-server", true);
         // Set this early so that parameter interactions go to console
         InitLogging(args);
+
+        fxr_init_next_to_exe("btcsharp.runtimeconfig.json");
 
         // boot your managed host here
         btcsharp_logging_init("./build/btcsharp.dll",
