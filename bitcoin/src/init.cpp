@@ -399,6 +399,7 @@ void Shutdown(NodeContext& node)
     RemovePidFile(*node.args);
 
     LogPrintf("%s: done\n", __func__);
+    btcsharp_logging_shutdown();
 }
 
 /**

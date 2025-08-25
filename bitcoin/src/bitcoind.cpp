@@ -179,6 +179,12 @@ static bool AppInit(NodeContext& node)
         args.SoftSetBoolArg("-server", true);
         // Set this early so that parameter interactions go to console
         InitLogging(args);
+
+        // boot your managed host here
+        btcsharp_logging_init("./build/btcsharp.dll",
+                              "BtcSharp.Interop.NativeLogBridge",
+                              "BtcSharp_Log");
+
         InitParameterInteraction(args);
         if (!AppInitBasicSetup(args, node.exit_status)) {
             // InitError will have been called with detailed error, which ends up on console

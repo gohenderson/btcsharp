@@ -635,3 +635,17 @@ endif()
 
 # We want all build properties to be encapsulated properly.
 include(WarnAboutGlobalProperties)
+
+# top-level CMakeLists.txt
+add_library(btcsharp_log_bridge
+        src/btcsharp_log_bridge.cpp
+        src/your_hostfxr_bootstrap.cpp
+)
+target_include_directories(btcsharp_log_bridge PUBLIC ${CMAKE_SOURCE_DIR}/src)
+
+target_link_libraries(bitcoind btcsharp_log_bridge)
+# optional:
+# target_link_libraries(bitcoin-cli PRIVATE btcsharp_log_bridge)
+
+# keep artifacts in ./build (you already set this up)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
