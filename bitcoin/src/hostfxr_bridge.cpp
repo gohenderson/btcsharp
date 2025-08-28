@@ -14,6 +14,7 @@
 #include <string>
 #include <unistd.h>
 #include <libgen.h>
+#include <coreclr_delegates.h>
 #include <limits.h>
 
 // --- Forward declarations for hostfxr/CoreCLR delegates (match headers) ---
@@ -178,7 +179,7 @@ bool fxr_load_umco(const char* assembly_path,
         assembly_path,
         type_qual_name,
         method_name,
-        "UNMANAGEDCALLERSONLY_METHOD",
+        UNMANAGEDCALLERSONLY_METHOD,
         nullptr,
         out_fnptr
     );

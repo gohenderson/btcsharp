@@ -2,6 +2,7 @@
 #include "hostfxr_bridge.h"
 #include <atomic>
 #include <cstdio>
+#include <libgen.h>
 #include <string>
 
 #ifndef _MSC_VER
@@ -15,18 +16,20 @@ using managed_shutdown_fn = void(__cdecl*)();
 static std::atomic<managed_log_fn>     s_log{nullptr};
 static std::atomic<managed_shutdown_fn> s_shutdown{nullptr};
 
-bool btcsharp_logging_init(const char* managed_assembly_path,
-                           const char* /*typeName*/,
-                           const char* /*methodName*/)
+static std::string dir_of_self()
 {
-    if (!managed_assembly_path) return false;
+    char buf[PATH_MAX];
+    ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf)-1);
+    if (n <= 0) return ".";
+    buf[n] = '\0';
+    return std::string(dirname(buf));
+}
 
-    // Derive runtimeconfig path: same folder/name but .runtimeconfig.json
-    std::string asm_path = managed_assembly_path;
-    std::string rcfg_path = asm_path;
-    auto pos = rcfg_path.rfind('.');
-    if (pos != std::string::npos) rcfg_path.replace(pos, std::string::npos, ".runtimeconfig.json");
-    else                          rcfg_path += ".runtimeconfig.json";
+bool btcsharp_logging_init(const char*, const char*, const char*)
+{
+    const std::string exe_dir = dir_of_self();
+    const std::string asm_path = exe_dir + "/btcsharp.dll";
+    const std::string rcfg_path = exe_dir + "/btcsharp.runtimeconfig.json";
 
     if (!fxr_init_from_runtimeconfig(rcfg_path.c_str())) {
         std::fprintf(stderr, "[btcsharp] fxr init failed\n");
@@ -36,12 +39,12 @@ bool btcsharp_logging_init(const char* managed_assembly_path,
     void* log_ptr = nullptr;
     if (!fxr_load_umco(
             asm_path.c_str(),
-            "BtcSharp.Interop.NativeLogBridge, btcsharp",  // Namespace.Type, Assembly
+            "BtcSharp.Interop.NativeLogBridge, btcsharp",
             "Log",
             &log_ptr)) {
         std::fprintf(stderr, "[btcsharp] failed to get Log export\n");
-        // keep native sinks; don't hard-fail
-    } else {
+        return false;
+            } else {
         s_log.store(reinterpret_cast<managed_log_fn>(log_ptr), std::memory_order_release);
     }
 
