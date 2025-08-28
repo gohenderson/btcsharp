@@ -696,5 +696,9 @@ target_include_directories(hostfxr_bridge PRIVATE
 )
 # Linux: link dl + nethost. Keep signature STYLE consistent per target when linking!
 target_link_libraries(hostfxr_bridge ${NETHOST_LIB} dl)
-
 target_link_libraries(btcsharp_log_bridge hostfxr_bridge)
+target_link_libraries(bitcoind        btcsharp_log_bridge hostfxr_bridge)
+target_link_libraries(bitcoin-cli     btcsharp_log_bridge hostfxr_bridge)
+target_link_libraries(bitcoin-tx      btcsharp_log_bridge hostfxr_bridge)
+target_link_libraries(bitcoin-util    btcsharp_log_bridge hostfxr_bridge)
+target_link_libraries(test_bitcoin    btcsharp_log_bridge hostfxr_bridge)
