@@ -702,3 +702,7 @@ target_link_libraries(bitcoin-cli     btcsharp_log_bridge hostfxr_bridge)
 target_link_libraries(bitcoin-tx      btcsharp_log_bridge hostfxr_bridge)
 target_link_libraries(bitcoin-util    btcsharp_log_bridge hostfxr_bridge)
 target_link_libraries(test_bitcoin    btcsharp_log_bridge hostfxr_bridge)
+
+add_library(btcsharp_bech32_bridge STATIC src/btcsharp_bech32_bridge.cpp)
+target_include_directories(btcsharp_bech32_bridge PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(btcsharp_bech32_bridge hostfxr_bridge)
